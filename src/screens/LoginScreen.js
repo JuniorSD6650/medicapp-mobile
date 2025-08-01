@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { View, StyleSheet, Image, TouchableOpacity, ScrollView } from 'react-native';
 import { TextInput, Button, Text, Snackbar } from 'react-native-paper';
 import { AuthContext } from '../context/AuthContext';
@@ -10,8 +10,42 @@ const LoginScreen = () => {
   const [loading, setLoading] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [connectionStatus, setConnectionStatus] = useState(null);
 
-  const { login, error } = useContext(AuthContext);
+  const { login, error, checkServerConnection } = useContext(AuthContext);
+
+  // Verificar la conexión al cargar la pantalla, pero solo una vez
+  useEffect(() => {
+    let isMounted = true;
+    
+    const checkConnection = async () => {
+      try {
+        const result = await checkServerConnection();
+        // Solo mostrar error si la conexión falla
+        if (isMounted && !result.success) {
+          setSnackbarMessage(`Error de conexión: ${result.error}`);
+          setSnackbarVisible(true);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setSnackbarMessage(`Error: ${error.message}`);
+          setSnackbarVisible(true);
+        }
+      }
+    };
+
+    checkConnection();
+    
+    // Limpieza para evitar actualizar estado en componentes desmontados
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Array de dependencias vacío para ejecutar solo una vez
+
+  // Función para verificar conexión pero sin mostrar UI
+  const testServerConnection = async () => {
+    return await checkServerConnection();
+  };
 
   const handleLogin = async () => {
     // Validación básica
@@ -21,19 +55,43 @@ const LoginScreen = () => {
       return;
     }
 
-    setLoading(true);
-    const result = await login(email, password);
-    setLoading(false);
+    // Verificar la conexión antes de intentar iniciar sesión
+    if (connectionStatus !== 'connected') {
+      const connectionTest = await checkServerConnection();
+      if (!connectionTest.success) {
+        setSnackbarMessage(`No se puede conectar al servidor: ${connectionTest.error}`);
+        setSnackbarVisible(true);
+        return;
+      }
+    }
 
-    if (!result) {
-      setSnackbarMessage(error || 'Error al iniciar sesión');
+    try {
+      setLoading(true);
+      console.log('Intentando iniciar sesión...');
+      
+      const result = await login(email, password);
+      
+      if (!result) {
+        setSnackbarMessage(error || 'Error al iniciar sesión');
+        setSnackbarVisible(true);
+        console.log('Login fallido, error:', error);
+      } else {
+        console.log('Login exitoso, rol:', result);
+      }
+    } catch (e) {
+      console.error('Error en handleLogin:', e);
+      setSnackbarMessage('Error inesperado: ' + e.message);
       setSnackbarVisible(true);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>
+        {/* Eliminamos el indicador de estado de conexión */}
+        
         <Image
           source={require('../../assets/icon.png')}
           style={styles.logo}
@@ -148,5 +206,4 @@ const styles = StyleSheet.create({
     color: '#2196F3',
   },
 });
-
 export default LoginScreen;

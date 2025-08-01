@@ -36,16 +36,20 @@ export const AuthProvider = ({ children }) => {
     bootstrapAsync();
   }, []);
 
-  // Iniciar sesión
+  // Iniciar sesión con mejor manejo de errores
   const login = async (email, password) => {
     setIsLoading(true);
     setError(null);
     
     try {
+      console.log('Intentando login con:', email);
+      
       const response = await api.post('/api/auth/login', {
         email,
         password
       });
+      
+      console.log('Login exitoso:', response.data);
       
       const { token, user } = response.data;
       
@@ -62,7 +66,12 @@ export const AuthProvider = ({ children }) => {
       
       return user.rol;
     } catch (error) {
-      setError(error.response?.data?.message || 'Error al iniciar sesión');
+      console.error('Error en login:', error.message, error.response?.data);
+      setError(
+        error.response?.data?.message || 
+        error.message || 
+        'Error de conexión. Verifica tu red y la dirección del servidor.'
+      );
       return null;
     } finally {
       setIsLoading(false);
@@ -90,6 +99,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Función para probar la conexión al servidor
+  const checkServerConnection = async () => {
+    try {
+      // No establecer isLoading aquí para evitar re-renderizaciones innecesarias
+      const result = await api.testConnection();
+      return result;
+    } catch (error) {
+      console.error('Error de conexión:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       isLoading,
@@ -97,7 +121,8 @@ export const AuthProvider = ({ children }) => {
       userInfo,
       error,
       login,
-      logout
+      logout,
+      checkServerConnection
     }}>
       {children}
     </AuthContext.Provider>
